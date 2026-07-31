@@ -21,8 +21,8 @@ LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 1e-4
 
 BCE_WEIGHT = 0.5
-EDGE_POS_WEIGHT = 30.0
-LAMBDA_EDGE = 1 # update here to run experiments on different lambda_edge values (0.1, 0.3, 0.5, 1)
+EDGE_POS_WEIGHT = 30 # update here to run experiments on different edge_pos_weight values (1, 5, 10, 20, 30)
+LAMBDA_EDGE = 0.1 # update here to run experiments on different lambda_edge values (0.1, 0.3, 0.5, 1)
 
 CLIP_NORM = 0.25
 
@@ -42,7 +42,7 @@ ENCODER_NAME = "resnet34"
 ENCODER_WEIGHTS = "imagenet"
 
 BASELINE_OUT_DIR = Path("./runs/kvasir_unet_baseline")
-BOUNDARY_OUT_DIR = Path("./runs/kvasir_unet_boundary_lambda_" + str(LAMBDA_EDGE))
+BOUNDARY_OUT_DIR = Path("./runs/kvasir_unet_boundary" + "_lambda_" + str(LAMBDA_EDGE) + "_pos_" + str(EDGE_POS_WEIGHT))
 
 # 2 Seed
 def set_seed(seed=SEED):

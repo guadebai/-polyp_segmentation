@@ -43,6 +43,12 @@ MODEL_CONFIGS = {
         "model_type": "boundary",
         "checkpoint": Path("./runs/kvasir_unet_boundary_lambda_1/best.pth"),
     },
+     "lambda_0_1_pos_10": {
+        "model_type": "boundary",
+        "checkpoint": Path(
+            "./runs/kvasir_unet_boundary_lambda_0.1_pos_10/best.pth"
+        ),
+    },
 }
 
 
