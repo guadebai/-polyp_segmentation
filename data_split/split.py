@@ -1,9 +1,16 @@
-from pathlib import Path
+import random
 import sys
+from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from train.train_common import DATA_ROOT, get_data_split
+from train.train_common import (
+    DATA_ROOT,
+    SEED,
+    TRAIN_RATIO,
+    VAL_RATIO,
+)
+
 
 def save_names(path: Path, names: list[str]) -> None:
     path.write_text(
@@ -12,24 +19,64 @@ def save_names(path: Path, names: list[str]) -> None:
     )
 
 
-def main() -> None:
-    train_names, val_names, test_names = get_data_split(DATA_ROOT)
+def list_stems(root_dir: str) -> list[str]:
+    image_dir = Path(root_dir) / "images"
+    mask_dir = Path(root_dir) / "masks"
 
-    # check no overlap
+    image_stems = {
+        path.stem for path in image_dir.glob("*.jpg")
+    }
+    mask_stems = {
+        path.stem for path in mask_dir.glob("*.jpg")
+    }
+
+    if image_stems != mask_stems:
+        raise ValueError("Images and masks do not match.")
+
+    return sorted(image_stems)
+
+
+def main() -> None:
+    names = list_stems(DATA_ROOT)
+
+    rng = random.Random(SEED)
+    rng.shuffle(names)
+
+    total = len(names)
+    train_end = int(TRAIN_RATIO * total)
+    val_end = train_end + int(VAL_RATIO * total)
+
+    train_names = names[:train_end]
+    val_names = names[train_end:val_end]
+    test_names = names[val_end:]
+
     train_set = set(train_names)
     val_set = set(val_names)
     test_set = set(test_names)
 
-    assert train_set.isdisjoint(val_set), "found overlap between train and val"
-    assert train_set.isdisjoint(test_set), "foun overlap between train and test"
-    assert val_set.isdisjoint(test_set), "found overlap between val and test"
+    if not train_set.isdisjoint(val_set):
+        raise ValueError("Found overlap between train and val.")
 
-    total = len(train_names) + len(val_names) + len(test_names)
+    if not train_set.isdisjoint(test_set):
+        raise ValueError("Found overlap between train and test.")
 
-    assert len(train_names) == 700, f"incorrect train count：{len(train_names)}"
-    assert len(val_names) == 150, f"incorrect val count：{len(val_names)}"
-    assert len(test_names) == 150, f"incorrect test count：{len(test_names)}"
-    assert total == 1000, f"incorrect total count：{total}"
+    if not val_set.isdisjoint(test_set):
+        raise ValueError("Found overlap between val and test.")
+
+    if len(train_names) != 700:
+        raise ValueError(
+            f"Incorrect train count: {len(train_names)}"
+        )
+
+    if len(val_names) != 150:
+        raise ValueError(
+            f"Incorrect val count: {len(val_names)}"
+        )
+
+    if len(test_names) != 150:
+        raise ValueError(
+            f"Incorrect test count: {len(test_names)}"
+        )
 
     split_dir = Path(__file__).resolve().parent / "splits"
     split_dir.mkdir(parents=True, exist_ok=True)
@@ -38,10 +85,10 @@ def main() -> None:
     save_names(split_dir / "val.txt", val_names)
     save_names(split_dir / "test.txt", test_names)
 
-    print("Data split lists saved successfully:")
-    print(f"train: {len(train_names)} -> {split_dir / 'train.txt'}")
-    print(f"val:   {len(val_names)} -> {split_dir / 'val.txt'}")
-    print(f"test:  {len(test_names)} -> {split_dir / 'test.txt'}")
+    print("Data split lists generated successfully:")
+    print(f"train: {len(train_names)}")
+    print(f"val:   {len(val_names)}")
+    print(f"test:  {len(test_names)}")
     print(f"total: {total}")
 
 

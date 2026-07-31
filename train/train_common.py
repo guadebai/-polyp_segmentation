@@ -54,27 +54,116 @@ def set_seed(seed=SEED):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+# 3 Fixed data split
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SPLIT_DIR = REPO_ROOT / "data_split" / "splits"
 
-# 3 Data split
 def list_stems(root_dir=DATA_ROOT):
     image_dir = Path(root_dir) / "images"
-    return sorted([path.stem for path in image_dir.glob("*.jpg")])
+    mask_dir = Path(root_dir) / "masks"
 
+    image_stems = {
+        path.stem for path in image_dir.glob("*.jpg")
+    }
+    mask_stems = {
+        path.stem for path in mask_dir.glob("*.jpg")
+    }
+
+    if image_stems != mask_stems:
+        missing_masks = image_stems - mask_stems
+        missing_images = mask_stems - image_stems
+
+        raise ValueError(
+            "Images and masks do not match.\n"
+            f"Missing masks: {len(missing_masks)}\n"
+            f"Missing images: {len(missing_images)}"
+        )
+
+    return sorted(image_stems)
+
+def read_split_file(file_path):
+    file_path = Path(file_path)
+
+    if not file_path.exists():
+        raise FileNotFoundError(
+            f"Split file not found: {file_path}"
+        )
+
+    names = [
+        line.strip()
+        for line in file_path.read_text(
+            encoding="utf-8"
+        ).splitlines()
+        if line.strip()
+    ]
+
+    if len(names) != len(set(names)):
+        raise ValueError(
+            f"Duplicate names found in: {file_path}"
+        )
+
+    return names
 
 def get_data_split(root_dir=DATA_ROOT):
-    names = list_stems(root_dir)
+    # Read the split files to help persist the same split across runs
+    train_names = read_split_file(
+        SPLIT_DIR / "train.txt"
+    )
+    val_names = read_split_file(
+        SPLIT_DIR / "val.txt"
+    )
+    test_names = read_split_file(
+        SPLIT_DIR / "test.txt"
+    )
 
-    rng = random.Random(SEED)
-    rng.shuffle(names)
+    train_set = set(train_names)
+    val_set = set(val_names)
+    test_set = set(test_names)
 
-    total = len(names)
+    if not train_set.isdisjoint(val_set):
+        raise ValueError("train and val overlap.")
 
-    train_end = int(TRAIN_RATIO * total)
-    val_end = train_end + int(VAL_RATIO * total)
+    if not train_set.isdisjoint(test_set):
+        raise ValueError("train and test overlap.")
 
-    train_names = names[:train_end]
-    val_names = names[train_end:val_end]
-    test_names = names[val_end:]
+    if not val_set.isdisjoint(test_set):
+        raise ValueError("val and test overlap.")
+
+    available_names = set(list_stems(root_dir))
+    split_names = train_set | val_set | test_set
+
+    missing_names = split_names - available_names
+    extra_names = available_names - split_names
+
+    if missing_names:
+        raise ValueError(
+            f"{len(missing_names)} split samples "
+            "are missing from the dataset."
+        )
+
+    if extra_names:
+        raise ValueError(
+            f"{len(extra_names)} dataset samples "
+            "are not included in the split files."
+        )
+
+    if len(train_names) != 700:
+        raise ValueError(
+            f"Expected 700 train samples, "
+            f"found {len(train_names)}."
+        )
+
+    if len(val_names) != 150:
+        raise ValueError(
+            f"Expected 150 val samples, "
+            f"found {len(val_names)}."
+        )
+
+    if len(test_names) != 150:
+        raise ValueError(
+            f"Expected 150 test samples, "
+            f"found {len(test_names)}."
+        )
 
     return train_names, val_names, test_names
 
