@@ -22,7 +22,7 @@ WEIGHT_DECAY = 1e-4
 
 BCE_WEIGHT = 0.5
 EDGE_POS_WEIGHT = 30.0
-LAMBDA_EDGE = 1
+LAMBDA_EDGE = 1 # update here to run experiments on different lambda_edge values (0.1, 0.3, 0.5, 1)
 
 CLIP_NORM = 0.25
 
@@ -42,8 +42,7 @@ ENCODER_NAME = "resnet34"
 ENCODER_WEIGHTS = "imagenet"
 
 BASELINE_OUT_DIR = Path("./runs/kvasir_unet_baseline")
-BOUNDARY_OUT_DIR = Path("./runs/kvasir_unet_boundary_lambda_1")
-
+BOUNDARY_OUT_DIR = Path("./runs/kvasir_unet_boundary_lambda_" + str(LAMBDA_EDGE))
 
 # 2 Seed
 def set_seed(seed=SEED):
@@ -98,9 +97,11 @@ def make_transforms(train=True):
                 blur_limit=(3, 5),
                 p=0.1
             ),
-        ])
+        ],
+        seed=SEED,
+    )
 
-    return A.Compose([])
+    return A.Compose([], seed=SEED)
 
 
 # 5 Model
