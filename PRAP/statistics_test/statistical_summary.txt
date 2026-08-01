@@ -1,0 +1,15 @@
+PRAP paired statistical summary (test set)
+==========================================
+
+Positive mean improvement always favors PRAP.
+Holm correction across all 24 tests is reported.
+
+Dice: comparator mean=0.914075, PRAP mean=0.914503, mean improvement=0.000428, 95% CI=[-0.005813, 0.007619], Holm p=1, rank-biserial=-0.120503
+IoU: comparator mean=0.858974, PRAP mean=0.858947, mean improvement=-0.000027, 95% CI=[-0.007954, 0.008689], Holm p=1, rank-biserial=-0.125071
+Precision: comparator mean=0.925861, PRAP mean=0.938867, mean improvement=0.013006, 95% CI=[0.006856, 0.020725], Holm p=4.67048e-11, rank-biserial=0.824481
+Recall: comparator mean=0.927988, PRAP mean=0.914629, mean improvement=-0.013359, 95% CI=[-0.018497, -0.008872], Holm p=1.13697e-17, rank-biserial=-1.000000
+HD95: comparator mean=24.174166, PRAP mean=23.018880, mean improvement=1.155287, 95% CI=[-0.741682, 3.450384], Holm p=1, rank-biserial=-0.085714
+FP: comparator mean=1422.386667, PRAP mean=993.566667, mean improvement=428.820000, 95% CI=[202.167500, 735.337167], Holm p=1.15012e-18, rank-biserial=1.000000
+
+FP totals:
+None=213358, PRAP=149035, reduction=64323

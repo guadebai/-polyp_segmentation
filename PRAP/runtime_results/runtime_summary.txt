@@ -1,0 +1,30 @@
+benchmark_runtime.py version: 1.0
+
+Experimental conditions
+- Test images: 150
+- Warm-up images: 20
+- Repeats: 5
+- Batch size: 1
+- Excluded: disk I/O, image preprocessing, metric calculation, CSV writing
+- Model-only timing excludes host-to-device transfer
+- Pipeline timing includes forward, sigmoid, device-to-host copy, and PRAP
+- PRAP parameters: PostprocessParams(candidate_threshold=0.5, min_area=320, entropy_threshold=0.45, seed_threshold=0.95, kernel_size=3, dilation_iterations=5)
+
+Hardware and software
+- OS: Windows-10-10.0.26200-SP0
+- Python: 3.10.19
+- PyTorch: 2.10.0+cu128
+- CUDA_Runtime: 12.8
+- Device: cuda
+- GPU: NVIDIA GeForce RTX 5060 Laptop GPU
+- CPU: 13th Gen Intel(R) Core(TM) i7-13650HX
+- RAM: 15.7 GB
+- Image_Size: 352x352
+- Batch_Size: 1
+
+Results
+- Baseline_forward_plus_sigmoid: 6.6183 ± 0.1849 ms/image; 151.10 images/s
+- PRAP_postprocessing_only: 0.9791 ± 0.0219 ms/image; 1021.36 images/s
+- Compute_pipeline: 7.6531 ± 0.9661 ms/image; 130.67 images/s
+
+PRAP relative overhead versus model-only inference: 14.79%
