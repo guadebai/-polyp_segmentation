@@ -1,34 +1,21 @@
-visualize_cases.py version: 1.1-batch-reproducible
+visualize_cases.py version: 1.2-objective-case-selection
 
 Selection basis
 - Split: fixed test set (150 images)
-- Success: largest FP reduction while Dice drop <= 0.005 and Recall drop <= 0.015
-- Failure: largest Recall/Dice decrease after excluding successes
+- Improvement: FP reduction > 0, Dice decrease <= 0.005000, and recall decrease <= 0.015000
+- Trade-off: Dice or recall decreased after post-processing; cases were ranked by recall decrease, Dice decrease, and FN increase
+- Minimal change: zero pixels were removed, indicating identical baseline and proposed prediction masks
 - Parameters are the validation-selected formal settings
-- Strict regenerated-metric check: True
+- Regenerated prediction consistency check: True
 
 Selected cases
-- success 1: cju1ewnoh5z030855vpex9uzt; FP reduction=16779; Delta Dice=+0.271856; Delta Precision=+0.303743; Delta Recall=-0.000396; FN increase=5
-- success 2: cju7ey10f2rvf0871bwbi9x82; FP reduction=3209; Delta Dice=+0.135278; Delta Precision=+0.188483; Delta Recall=+0.000000; FN increase=0
-- success 3: cju6z7e4bwgdd0987ogkzq9kt; FP reduction=2884; Delta Dice=+0.066890; Delta Precision=+0.116122; Delta Recall=-0.000164; FN increase=3
-- success 4: cju77re6fz5bb0817vp9redjg; FP reduction=1527; Delta Dice=+0.036642; Delta Precision=+0.045858; Delta Recall=+0.000000; FN increase=0
-- success 5: cju6xlygpw7bs0818n691jsq4; FP reduction=1498; Delta Dice=+0.015576; Delta Precision=+0.031116; Delta Recall=-0.002981; FN increase=115
-- success 6: cju5ktjwofed70817eg58ef7u; FP reduction=1341; Delta Dice=+0.040958; Delta Precision=+0.075883; Delta Recall=-0.004989; FN increase=66
-- success 7: cju1gghyjwxt80835vx0wgxw0; FP reduction=1256; Delta Dice=+0.020615; Delta Precision=+0.039304; Delta Recall=-0.001346; FN increase=35
-- success 8: cju1ffnjn6ctm08015perkg37; FP reduction=1188; Delta Dice=+0.019603; Delta Precision=+0.035439; Delta Recall=-0.000966; FN increase=25
-- failure 1: cju8doa16u5gh0818w1ywda3q; FP reduction=41; Delta Dice=-0.107337; Delta Precision=-0.001826; Delta Recall=-0.168838; FN increase=15021
-- failure 2: cju1dg44i4z3w0801nyz4p6zf; FP reduction=16; Delta Dice=-0.122838; Delta Precision=+0.022695; Delta Recall=-0.153915; FN increase=171
-- failure 3: cju3y21quj0ir0818kgjagr15; FP reduction=5; Delta Dice=-0.099493; Delta Precision=-0.002305; Delta Recall=-0.138477; FN increase=4494
-- failure 4: cju2yi9tz8vky0801yqip0xyl; FP reduction=85; Delta Dice=-0.062249; Delta Precision=+0.001124; Delta Recall=-0.105377; FN increase=3418
-- failure 5: cju8c2rqzs5t80850d0zky5dy; FP reduction=6361; Delta Dice=+0.012967; Delta Precision=+0.110957; Delta Recall=-0.102432; FN increase=3950
-- failure 6: cju7avvi51iox0817ym55y6tt; FP reduction=2029; Delta Dice=-0.047145; Delta Precision=+0.034238; Delta Recall=-0.091119; FN increase=5844
-- failure 7: cju2r6mt2om21099352pny5gw; FP reduction=2; Delta Dice=-0.088568; Delta Precision=-0.005311; Delta Recall=-0.088513; FN increase=3341
-- failure 8: cju2tpfa5uyx408359datxqqj; FP reduction=4; Delta Dice=-0.047117; Delta Precision=-0.001663; Delta Recall=-0.080108; FN increase=1008
-- neutral 1: cju0s690hkp960855tjuaqvv0; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
-- neutral 2: cju160wshltz10993i1gmqxbe; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
-- neutral 3: cju16d65tzw9d0799ouslsw25; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
-- neutral 4: cju1819curo000988pd5xcqme; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
-- neutral 5: cju1b75x63ddl0799sdp0i2j3; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
-- neutral 6: cju1cdxvz48hw0801i0fjwcnk; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
-- neutral 7: cju1cqc7n4gpy0855jt246k68; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
-- neutral 8: cju1cu1u2474n0878tt7v4tdr; FP reduction=0; Delta Dice=+0.000000; Delta Precision=+0.000000; Delta Recall=+0.000000; FN increase=0
+- Improvement 1: cju1ewnoh5z030855vpex9uzt; FP reduction=16779; Delta Dice=+0.271856; Delta Precision=+0.303743; Delta Recall=-0.000396; FN increase=5
+- Improvement 2: cju7ey10f2rvf0871bwbi9x82; FP reduction=3209; Delta Dice=+0.135278; Delta Precision=+0.188483; Delta Recall=+0.000000; FN increase=0
+- Improvement 3: cju6z7e4bwgdd0987ogkzq9kt; FP reduction=2884; Delta Dice=+0.066890; Delta Precision=+0.116122; Delta Recall=-0.000164; FN increase=3
+- Improvement 4: cju77re6fz5bb0817vp9redjg; FP reduction=1527; Delta Dice=+0.036642; Delta Precision=+0.045858; Delta Recall=+0.000000; FN increase=0
+- Improvement 5: cju6xlygpw7bs0818n691jsq4; FP reduction=1498; Delta Dice=+0.015576; Delta Precision=+0.031116; Delta Recall=-0.002981; FN increase=115
+- Trade-off 1: cju8doa16u5gh0818w1ywda3q; FP reduction=41; Delta Dice=-0.107337; Delta Precision=-0.001826; Delta Recall=-0.168838; FN increase=15021
+- Trade-off 2: cju1dg44i4z3w0801nyz4p6zf; FP reduction=16; Delta Dice=-0.122838; Delta Precision=+0.022695; Delta Recall=-0.153915; FN increase=171
+- Trade-off 3: cju3y21quj0ir0818kgjagr15; FP reduction=5; Delta Dice=-0.099493; Delta Precision=-0.002305; Delta Recall=-0.138477; FN increase=4494
+- Trade-off 4: cju2yi9tz8vky0801yqip0xyl; FP reduction=85; Delta Dice=-0.062249; Delta Precision=+0.001124; Delta Recall=-0.105377; FN increase=3418
+- Trade-off 5: cju8c2rqzs5t80850d0zky5dy; FP reduction=6361; Delta Dice=+0.012967; Delta Precision=+0.110957; Delta Recall=-0.102432; FN increase=3950

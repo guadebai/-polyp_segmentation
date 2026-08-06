@@ -27,7 +27,7 @@ from postprocess import PostprocessParams, apply_postprocess
 from train_common import BATCH_SIZE, UnetBaseline, set_seed
 
 
-SCRIPT_VERSION = "1.1-batch-reproducible"
+SCRIPT_VERSION = "1.2-objective-case-selection"
 
 PRAP_DIR = Path(__file__).resolve().parent
 DEFAULT_RESULTS_TEST_DIR = PRAP_DIR / "results_test"
@@ -39,7 +39,13 @@ METHOD_TITLES = {
     "area": "Area",
     "entropy": "Entropy",
     "seeded": "Seeded",
-    "prap": "PRAP",
+    "prap": "Proposed",
+}
+
+CASE_TYPE_TITLES = {
+    "improvement": "Improvement",
+    "trade_off": "Trade-off",
+    "minimal_change": "Minimal change",
 }
 
 CSV_PATHS = {
@@ -77,8 +83,9 @@ class SelectedCase:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Automatically select and visualize PRAP success and failure cases "
-            "from the fixed 150-image test set."
+            "Automatically select and visualize representative improvement, "
+            "trade-off, and minimal-change cases from the fixed 150-image "
+            "test set."
         )
     )
     parser.add_argument(
@@ -97,32 +104,39 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
     )
+
     parser.add_argument(
-        "--success-count",
+        "--improvement-count",
+        dest="improvement_count",
         type=int,
-        default=8,
+        default=3,
+        help="Number of improvement cases to select.",
     )
     parser.add_argument(
-        "--failure-count",
+        "--trade-off-count",
+        dest="trade_off_count",
         type=int,
-        default=8,
+        default=3,
+        help="Number of trade-off cases to select.",
     )
     parser.add_argument(
-        "--neutral-count",
+        "--minimal-change-count",
+        dest="minimal_change_count",
         type=int,
-        default=8,
+        default=0,
+        help="Number of unchanged prediction cases to select.",
     )
     parser.add_argument(
         "--max-dice-drop",
         type=float,
         default=0.005,
-        help="Maximum allowed Dice decrease for automatic success cases.",
+        help="Maximum allowed Dice decrease for an improvement case.",
     )
     parser.add_argument(
         "--max-recall-drop",
         type=float,
         default=0.015,
-        help="Maximum allowed Recall decrease for automatic success cases.",
+        help="Maximum allowed recall decrease for an improvement case.",
     )
     parser.add_argument(
         "--dpi",
@@ -134,8 +148,8 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "Regenerate predictions and verify Dice/Precision/Recall/FP/FN "
-            "against the saved per-image CSV values."
+            "Regenerate predictions and verify Dice, IoU, precision, "
+            "recall, FP, and FN against the saved per-image CSV values."
         ),
     )
     return parser.parse_args()
@@ -149,13 +163,25 @@ def resolve_path(path: Path, base: Path = REPO_ROOT) -> Path:
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    for name in ("success_count", "failure_count", "neutral_count"):
+    count_arguments = (
+        "improvement_count",
+        "trade_off_count",
+        "minimal_change_count",
+    )
+
+    for name in count_arguments:
         if getattr(args, name) < 0:
-            raise ValueError(f"--{name.replace('_', '-')} must be non-negative.")
+            argument_name = name.replace("_", "-")
+            raise ValueError(
+                f"--{argument_name} must be non-negative."
+            )
+
     if args.max_dice_drop < 0:
         raise ValueError("--max-dice-drop must be non-negative.")
+
     if args.max_recall_drop < 0:
         raise ValueError("--max-recall-drop must be non-negative.")
+
     if args.dpi <= 0:
         raise ValueError("--dpi must be positive.")
 
@@ -306,77 +332,143 @@ def build_case_table(
 
 def select_cases(
     table: list[dict[str, float | int | str]],
-    success_count: int,
-    failure_count: int,
-    neutral_count: int,
+    improvement_count: int,
+    trade_off_count: int,
+    minimal_change_count: int,
     max_dice_drop: float,
     max_recall_drop: float,
 ) -> list[SelectedCase]:
-    success_candidates = [
+    """
+    Select representative qualitative cases using predefined per-image rules.
+
+    Improvement:
+        FP is reduced, while Dice and recall decreases remain within
+        the predefined limits.
+
+    Trade-off:
+        Dice or recall decreases after post-processing.
+
+    Minimal change:
+        The proposed post-processing removes no pixels, meaning that
+        the baseline and proposed prediction masks are identical.
+    """
+
+    # --------------------------------------------------------------
+    # 1. Improvement cases
+    # --------------------------------------------------------------
+    improvement_candidates = [
         row
         for row in table
         if int(row["fp_reduction"]) > 0
         and float(row["delta_dice"]) >= -max_dice_drop
         and float(row["delta_recall"]) >= -max_recall_drop
     ]
-    success_candidates.sort(
+
+    improvement_candidates.sort(
         key=lambda row: (
             int(row["fp_reduction"]),
             float(row["delta_precision"]),
             float(row["delta_dice"]),
+            float(row["delta_recall"]),
         ),
         reverse=True,
     )
 
-    if len(success_candidates) < success_count:
-        fallback = sorted(
-            table,
-            key=lambda row: (
-                int(row["fp_reduction"]),
-                float(row["delta_precision"]),
-            ),
-            reverse=True,
-        )
-        existing = {str(row["sample"]) for row in success_candidates}
-        success_candidates.extend(
-            row for row in fallback if str(row["sample"]) not in existing
+    # Do not add fallback cases that fail the predefined criteria.
+    selected_improvement = improvement_candidates[:improvement_count]
+
+    if len(selected_improvement) < improvement_count:
+        print(
+            "Warning: only "
+            f"{len(selected_improvement)} improvement cases satisfied "
+            "the predefined selection criteria; "
+            f"{improvement_count} were requested."
         )
 
-    selected_success = success_candidates[:success_count]
-    used = {str(row["sample"]) for row in selected_success}
+    used_samples = {
+        str(row["sample"])
+        for row in selected_improvement
+    }
 
-    failure_candidates = [
-        row for row in table if str(row["sample"]) not in used
+    # --------------------------------------------------------------
+    # 2. Trade-off cases
+    # --------------------------------------------------------------
+    trade_off_candidates = [
+        row
+        for row in table
+        if str(row["sample"]) not in used_samples
+        and (
+            float(row["delta_recall"]) < 0
+            or float(row["delta_dice"]) < 0
+        )
     ]
-    failure_candidates.sort(
+
+    # Lower recall and Dice differences are ranked first. If tied,
+    # a larger increase in false-negative pixels is ranked first.
+    trade_off_candidates.sort(
         key=lambda row: (
             float(row["delta_recall"]),
             float(row["delta_dice"]),
             -int(row["fn_increase"]),
         )
     )
-    selected_failure = failure_candidates[:failure_count]
-    used.update(str(row["sample"]) for row in selected_failure)
 
-    neutral_candidates = [
-        row for row in table if str(row["sample"]) not in used
-    ]
-    neutral_candidates.sort(
-        key=lambda row: (
-            abs(float(row["delta_dice"]))
-            + abs(float(row["delta_precision"]))
-            + abs(float(row["delta_recall"])),
-            abs(int(row["fp_reduction"])),
+    selected_trade_off = trade_off_candidates[:trade_off_count]
+
+    if len(selected_trade_off) < trade_off_count:
+        print(
+            "Warning: only "
+            f"{len(selected_trade_off)} trade-off cases satisfied "
+            "the predefined selection criteria; "
+            f"{trade_off_count} were requested."
         )
-    )
-    selected_neutral = neutral_candidates[:neutral_count]
 
+    used_samples.update(
+        str(row["sample"])
+        for row in selected_trade_off
+    )
+
+    # --------------------------------------------------------------
+    # 3. Minimal-change cases
+    # --------------------------------------------------------------
+    # Because the proposed method only removes pixels, zero removed
+    # pixels means that the baseline and proposed masks are identical.
+    minimal_change_candidates = [
+        row
+        for row in table
+        if str(row["sample"]) not in used_samples
+        and int(row["removed_pixels"]) == 0
+    ]
+
+    # Use the sample name as a deterministic tie-breaking rule.
+    minimal_change_candidates.sort(
+        key=lambda row: str(row["sample"])
+    )
+
+    selected_minimal_change = minimal_change_candidates[
+        :minimal_change_count
+    ]
+
+    if len(selected_minimal_change) < minimal_change_count:
+        print(
+            "Warning: only "
+            f"{len(selected_minimal_change)} minimal-change cases "
+            "had identical baseline and proposed masks; "
+            f"{minimal_change_count} were requested."
+        )
+
+    # --------------------------------------------------------------
+    # Convert selected rows to SelectedCase objects
+    # --------------------------------------------------------------
     selected: list[SelectedCase] = []
-    for case_type, rows in (
-        ("success", selected_success),
-        ("failure", selected_failure),
-        ("neutral", selected_neutral),
-    ):
+
+    case_groups = (
+        ("improvement", selected_improvement),
+        ("trade_off", selected_trade_off),
+        ("minimal_change", selected_minimal_change),
+    )
+
+    for case_type, rows in case_groups:
         for rank, row in enumerate(rows, start=1):
             selected.append(
                 SelectedCase(
@@ -516,31 +608,38 @@ def verify_metrics(
     saved: dict,
     tolerance: float = 1e-6,
 ) -> None:
-    comparisons = {
+    float_comparisons = {
         "dice": "Dice",
+        "iou": "IoU",
         "precision": "Precision",
         "recall": "Recall",
     }
-    for computed_field, saved_field in comparisons.items():
-        if (
-            abs(
-                float(computed[computed_field])
-                - float(saved[saved_field])
-            )
-            > tolerance
-        ):
+
+    for computed_field, saved_field in float_comparisons.items():
+        computed_value = float(computed[computed_field])
+        saved_value = float(saved[saved_field])
+
+        if abs(computed_value - saved_value) > tolerance:
             raise RuntimeError(
                 f"Metric mismatch for {sample}/{method}: "
-                f"{computed_field} computed={computed[computed_field]}, "
-                f"saved={saved[saved_field]}."
+                f"{computed_field} computed={computed_value}, "
+                f"saved={saved_value}."
             )
 
-    for computed_field, saved_field in (("fp", "FP"), ("fn", "FN")):
-        if int(computed[computed_field]) != int(saved[saved_field]):
+    integer_comparisons = {
+        "fp": "FP",
+        "fn": "FN",
+    }
+
+    for computed_field, saved_field in integer_comparisons.items():
+        computed_value = int(computed[computed_field])
+        saved_value = int(saved[saved_field])
+
+        if computed_value != saved_value:
             raise RuntimeError(
                 f"Metric mismatch for {sample}/{method}: "
-                f"{computed_field} computed={computed[computed_field]}, "
-                f"saved={saved[saved_field]}."
+                f"{computed_field} computed={computed_value}, "
+                f"saved={saved_value}."
             )
 
 
@@ -635,6 +734,7 @@ def infer_selected_cases(
 
     return outputs
 
+
 def draw_case_row(
     axes: np.ndarray,
     case: SelectedCase,
@@ -672,8 +772,13 @@ def draw_case_row(
             pad=4,
         )
 
+    case_title = CASE_TYPE_TITLES.get(
+        case.case_type,
+        case.case_type.replace("_", " ").title(),
+    )
+
     axes[0].set_ylabel(
-        f"{case.case_type.capitalize()} {case.rank}\n{case.sample}\n"
+        f"{case_title} {case.rank}\n{case.sample}\n"
         f"FP reduction={case.fp_reduction}\n"
         f"ΔDice={case.delta_dice:+.3f}, "
         f"ΔRecall={case.delta_recall:+.3f}",
@@ -795,11 +900,11 @@ def write_selected_cases_csv(
             "Case_Type": case.case_type,
             "Rank": case.rank,
             "Sample": case.sample,
-            "FP_Reduction_None_minus_PRAP": case.fp_reduction,
-            "Delta_Dice_PRAP_minus_None": case.delta_dice,
-            "Delta_Precision_PRAP_minus_None": case.delta_precision,
-            "Delta_Recall_PRAP_minus_None": case.delta_recall,
-            "FN_Increase_PRAP_minus_None": case.fn_increase,
+            "FP_Reduction_Baseline_minus_Proposed": case.fp_reduction,
+            "Delta_Dice_Proposed_minus_Baseline": case.delta_dice,
+            "Delta_Precision_Proposed_minus_Baseline": case.delta_precision,
+            "Delta_Recall_Proposed_minus_Baseline": case.delta_recall,
+            "FN_Increase_Proposed_minus_Baseline": case.fn_increase,
         }
 
         for method in METHOD_ORDER:
@@ -831,24 +936,45 @@ def write_summary(
     selected: list[SelectedCase],
     output_path: Path,
     strict_metric_check: bool,
+    max_dice_drop: float,
+    max_recall_drop: float,
 ) -> None:
     lines = [
         f"visualize_cases.py version: {SCRIPT_VERSION}",
         "",
         "Selection basis",
         "- Split: fixed test set (150 images)",
-        "- Success: largest FP reduction while Dice drop <= 0.005 "
-        "and Recall drop <= 0.015",
-        "- Failure: largest Recall/Dice decrease after excluding successes",
+        (
+            "- Improvement: FP reduction > 0, "
+            f"Dice decrease <= {max_dice_drop:.6f}, and "
+            f"recall decrease <= {max_recall_drop:.6f}"
+        ),
+        (
+            "- Trade-off: Dice or recall decreased after "
+            "post-processing; cases were ranked by recall decrease, "
+            "Dice decrease, and FN increase"
+        ),
+        (
+            "- Minimal change: zero pixels were removed, indicating "
+            "identical baseline and proposed prediction masks"
+        ),
         "- Parameters are the validation-selected formal settings",
-        f"- Strict regenerated-metric check: {strict_metric_check}",
+        (
+            "- Regenerated prediction consistency check: "
+            f"{strict_metric_check}"
+        ),
         "",
         "Selected cases",
     ]
 
     for case in selected:
+        case_title = CASE_TYPE_TITLES.get(
+            case.case_type,
+            case.case_type.replace("_", " ").title(),
+        )
+
         lines.append(
-            f"- {case.case_type} {case.rank}: {case.sample}; "
+            f"- {case_title} {case.rank}: {case.sample}; "
             f"FP reduction={case.fp_reduction}; "
             f"Delta Dice={case.delta_dice:+.6f}; "
             f"Delta Precision={case.delta_precision:+.6f}; "
@@ -856,7 +982,10 @@ def write_summary(
             f"FN increase={case.fn_increase}"
         )
 
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    output_path.write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+    )
 
 
 def main() -> None:
@@ -876,9 +1005,9 @@ def main() -> None:
     table = build_case_table(records)
     selected = select_cases(
         table=table,
-        success_count=args.success_count,
-        failure_count=args.failure_count,
-        neutral_count=args.neutral_count,
+        improvement_count=args.improvement_count,
+        trade_off_count=args.trade_off_count,
+        minimal_change_count=args.minimal_change_count,
         max_dice_drop=args.max_dice_drop,
         max_recall_drop=args.max_recall_drop,
     )
@@ -888,8 +1017,13 @@ def main() -> None:
 
     print("Selected samples:")
     for case in selected:
+        case_title = CASE_TYPE_TITLES.get(
+            case.case_type,
+            case.case_type.replace("_", " ").title(),
+        )
+
         print(
-            f"  {case.case_type:<7} {case.rank}: {case.sample} | "
+            f"  {case_title:<15} {case.rank}: {case.sample} | "
             f"FP reduction={case.fp_reduction}, "
             f"Delta Dice={case.delta_dice:+.4f}, "
             f"Delta Recall={case.delta_recall:+.4f}"
@@ -930,9 +1064,15 @@ def main() -> None:
 
     grouped = {
         case_type: [
-            case for case in selected if case.case_type == case_type
+            case
+            for case in selected
+            if case.case_type == case_type
         ]
-        for case_type in ("success", "failure", "neutral")
+        for case_type in (
+            "improvement",
+            "trade_off",
+            "minimal_change",
+        )
     }
 
     for case_type, cases in grouped.items():
@@ -960,6 +1100,8 @@ def main() -> None:
         selected=selected,
         output_path=output_dir / "selection_summary.txt",
         strict_metric_check=args.strict_metric_check,
+        max_dice_drop=args.max_dice_drop,
+        max_recall_drop=args.max_recall_drop,
     )
 
     print("\nSaved qualitative outputs:")
